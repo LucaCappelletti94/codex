@@ -57,8 +57,11 @@ impl ModelProvider for AmazonBedrockModelProvider {
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
+        // Bedrock hosts OpenAI models that expand the namespace wrapper, so it
+        // defaults on. Mantle endpoints that reject the wrapper can opt out with
+        // an explicit `namespace_tools = false`.
         ProviderCapabilities {
-            namespace_tools: true,
+            namespace_tools: self.info.namespace_tools.unwrap_or(true),
             image_generation: false,
             web_search: false,
         }
@@ -145,6 +148,15 @@ mod tests {
                 web_search: false,
             }
         );
+    }
+
+    #[test]
+    fn capabilities_namespace_tools_honors_explicit_opt_out() {
+        let mut info = ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None);
+        info.namespace_tools = Some(false);
+        let provider = AmazonBedrockModelProvider::new(info);
+
+        assert!(!provider.capabilities().namespace_tools);
     }
 
     #[test]

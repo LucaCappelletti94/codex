@@ -40,6 +40,12 @@ impl Default for ProviderCapabilities {
     }
 }
 
+/// Whether a provider advertises the `type: "namespace"` tool wrapper: an
+/// explicit `namespace_tools` if set, otherwise `requires_openai_auth`.
+fn resolve_namespace_tools(info: &ModelProviderInfo) -> bool {
+    info.namespace_tools.unwrap_or(info.requires_openai_auth)
+}
+
 /// Current app-visible account state for a model provider.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderAccountState {
@@ -177,6 +183,13 @@ impl ConfiguredModelProvider {
 impl ModelProvider for ConfiguredModelProvider {
     fn info(&self) -> &ModelProviderInfo {
         &self.info
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            namespace_tools: resolve_namespace_tools(&self.info),
+            ..ProviderCapabilities::default()
+        }
     }
 
     fn auth_manager(&self) -> Option<Arc<AuthManager>> {
@@ -321,6 +334,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             requires_openai_auth: false,
             supports_websockets: false,
+            namespace_tools: None,
         }
     }
 
@@ -359,6 +373,29 @@ mod tests {
         );
 
         assert_eq!(provider.capabilities(), ProviderCapabilities::default());
+    }
+
+    #[test]
+    fn configured_non_openai_provider_flattens_namespace_tools() {
+        let provider = create_model_provider(
+            provider_for("https://example.test/v1".to_string()),
+            /*auth_manager*/ None,
+        );
+
+        assert!(!provider.capabilities().namespace_tools);
+    }
+
+    #[test]
+    fn configured_provider_namespace_tools_honors_explicit_override() {
+        let mut non_openai = provider_for("https://example.test/v1".to_string());
+        non_openai.namespace_tools = Some(true);
+        let provider = create_model_provider(non_openai, /*auth_manager*/ None);
+        assert!(provider.capabilities().namespace_tools);
+
+        let mut openai = ModelProviderInfo::create_openai_provider(/*base_url*/ None);
+        openai.namespace_tools = Some(false);
+        let provider = create_model_provider(openai, /*auth_manager*/ None);
+        assert!(!provider.capabilities().namespace_tools);
     }
 
     #[test]
