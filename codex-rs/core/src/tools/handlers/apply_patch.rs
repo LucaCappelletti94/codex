@@ -23,6 +23,8 @@ use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
 use crate::tools::handlers::apply_patch_spec::create_apply_patch_freeform_tool;
+use crate::tools::handlers::apply_patch_spec::create_apply_patch_function_tool;
+use crate::tools::handlers::parse_arguments;
 use crate::tools::handlers::resolve_tool_environment;
 use crate::tools::handlers::updated_hook_command;
 use crate::tools::hook_names::HookToolName;
@@ -54,16 +56,23 @@ use codex_tools::ToolSpec;
 use codex_utils_absolute_path::AbsolutePathBuf;
 
 const APPLY_PATCH_ARGUMENT_DIFF_BUFFER_INTERVAL: Duration = Duration::from_millis(500);
-/// Handles freeform `apply_patch` requests and routes verified patches to the
-/// selected environment filesystem.
+/// Handles `apply_patch` requests and routes verified patches to the selected
+/// environment filesystem. Patches arrive either as a custom (freeform) payload
+/// or, for function-calling models, as a JSON `function` payload.
 #[derive(Default)]
 pub struct ApplyPatchHandler {
     multi_environment: bool,
+    /// When true, the model is offered the JSON `function` form of apply_patch
+    /// rather than the freeform (custom) form.
+    use_function_tool: bool,
 }
 
 impl ApplyPatchHandler {
-    pub(crate) fn new(multi_environment: bool) -> Self {
-        Self { multi_environment }
+    pub(crate) fn new(multi_environment: bool, use_function_tool: bool) -> Self {
+        Self {
+            multi_environment,
+            use_function_tool,
+        }
     }
 }
 
@@ -258,6 +267,11 @@ fn write_permissions_for_paths(
 fn apply_patch_payload_command(payload: &ToolPayload) -> Option<String> {
     match payload {
         ToolPayload::Custom { input } => Some(input.clone()),
+        ToolPayload::Function { arguments } => parse_arguments::<serde_json::Value>(arguments)
+            .ok()?
+            .get("patch")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
         _ => None,
     }
 }
@@ -304,7 +318,11 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
     }
 
     fn spec(&self) -> ToolSpec {
-        create_apply_patch_freeform_tool(self.multi_environment)
+        if self.use_function_tool {
+            create_apply_patch_function_tool(self.multi_environment)
+        } else {
+            create_apply_patch_freeform_tool(self.multi_environment)
+        }
     }
 
     async fn handle(
@@ -321,10 +339,31 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
             ..
         } = invocation;
 
-        let ToolPayload::Custom { input: patch_input } = payload else {
-            return Err(FunctionCallError::RespondToModel(
-                "apply_patch handler received unsupported payload".to_string(),
-            ));
+        let (patch_input, environment_id_override) = match payload {
+            ToolPayload::Custom { input } => (input, None),
+            ToolPayload::Function { arguments } => {
+                let value: serde_json::Value = parse_arguments(&arguments)?;
+                let patch = value
+                    .get("patch")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        FunctionCallError::RespondToModel(
+                            "apply_patch function call requires a string `patch` argument"
+                                .to_string(),
+                        )
+                    })?
+                    .to_string();
+                let environment_id = value
+                    .get("environment_id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string);
+                (patch, environment_id)
+            }
+            _ => {
+                return Err(FunctionCallError::RespondToModel(
+                    "apply_patch handler received unsupported payload".to_string(),
+                ));
+            }
         };
         let args = match codex_apply_patch::parse_patch(&patch_input) {
             Ok(args) => args,
@@ -334,8 +373,12 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
                 )));
             }
         };
-        let selected_environment_id =
-            require_environment_id(args.environment_id.as_deref(), self.multi_environment)?;
+        let selected_environment_id = require_environment_id(
+            environment_id_override
+                .as_deref()
+                .or(args.environment_id.as_deref()),
+            self.multi_environment,
+        )?;
 
         // Verify the parsed patch against the selected environment filesystem.
         let Some(turn_environment) =
@@ -441,7 +484,10 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
 
 impl CoreToolRuntime for ApplyPatchHandler {
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Custom { .. })
+        matches!(
+            payload,
+            ToolPayload::Custom { .. } | ToolPayload::Function { .. }
+        )
     }
 
     fn create_diff_consumer(&self) -> Option<Box<dyn ToolArgumentDiffConsumer>> {
@@ -465,6 +511,21 @@ impl CoreToolRuntime for ApplyPatchHandler {
             ToolPayload::Custom { .. } => ToolPayload::Custom {
                 input: patch.to_string(),
             },
+            ToolPayload::Function { arguments } => {
+                // Preserve any other arguments (for example environment_id) and
+                // replace only the patch text.
+                let mut value: serde_json::Value =
+                    serde_json::from_str(&arguments).unwrap_or_else(|_| serde_json::json!({}));
+                if !value.is_object() {
+                    value = serde_json::json!({});
+                }
+                if let Some(object) = value.as_object_mut() {
+                    object.insert("patch".to_string(), serde_json::json!(patch));
+                }
+                ToolPayload::Function {
+                    arguments: value.to_string(),
+                }
+            }
             payload => payload,
         };
         Ok(invocation)

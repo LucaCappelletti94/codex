@@ -1,6 +1,16 @@
 use super::*;
 use crate::ModelsManagerConfig;
+use codex_protocol::openai_models::ApplyPatchToolType;
 use pretty_assertions::assert_eq;
+
+#[test]
+fn fallback_offers_function_apply_patch_tool() {
+    let model = model_info_from_slug("unknown-model");
+    assert_eq!(
+        model.apply_patch_tool_type,
+        Some(ApplyPatchToolType::Function)
+    );
+}
 
 #[test]
 fn reasoning_summaries_override_true_enables_support() {
