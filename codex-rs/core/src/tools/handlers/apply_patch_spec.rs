@@ -10,14 +10,17 @@ const APPLY_PATCH_LARK_GRAMMAR: &str = include_str!("apply_patch.lark");
 const APPLY_PATCH_FUNCTION_PATCH_DESCRIPTION: &str = r#"The full patch to apply, as a single string in the apply_patch envelope format.
 
 Wrap the changes between `*** Begin Patch` and `*** End Patch`. Inside, use one section per file:
-`*** Add File: <path>` followed by every new line prefixed with `+`.
+`*** Add File: <path>`, then EVERY line of the new file content on its own line prefixed with `+` (write a blank line as a lone `+`). A content line that does not begin with `+` is rejected as an invalid hunk header.
 `*** Update File: <path>` (optionally followed by `*** Move to: <new path>`), then `@@` context headers and hunk lines prefixed with `+` (added), `-` (removed), or a space (context).
 `*** Delete File: <path>`.
 
 Example:
 *** Begin Patch
-*** Add File: hello.txt
-+Hello world
+*** Add File: notes.md
++# Title
++
++First paragraph.
++Second line.
 *** End Patch"#;
 
 /// Returns a custom tool that can be used to edit files. Well-suited for GPT-5 models
@@ -64,7 +67,7 @@ pub fn create_apply_patch_function_tool(include_environment_id: bool) -> ToolSpe
     ToolSpec::Function(ResponsesApiTool {
         name: "apply_patch".to_string(),
         description:
-            "Use the `apply_patch` tool to edit files by passing the patch as the `patch` argument."
+            "Use the `apply_patch` tool to edit files by passing a patch as the `patch` argument. Wrap edits between `*** Begin Patch` and `*** End Patch`. When adding a file with `*** Add File: <path>`, EVERY line of new content MUST begin with a `+` (write a blank line as a lone `+`). A content line without a leading `+` is rejected as an invalid hunk header."
                 .to_string(),
         strict: false,
         defer_loading: None,

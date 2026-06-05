@@ -8,6 +8,7 @@ use crate::parser::EMPTY_CHANGE_CONTEXT_MARKER;
 use crate::parser::END_PATCH_MARKER;
 use crate::parser::EOF_MARKER;
 use crate::parser::Hunk;
+use crate::parser::INVALID_HUNK_HEADER_HELP;
 use crate::parser::MOVE_TO_MARKER;
 use crate::parser::ParseError;
 use crate::parser::UPDATE_FILE_MARKER;
@@ -178,7 +179,7 @@ impl StreamingPatchParser {
                 }
                 Err(InvalidHunkError {
                     message: format!(
-                        "'{trimmed}' is not a valid hunk header. Valid hunk headers: '*** Add File: {{path}}', '*** Delete File: {{path}}', '*** Update File: {{path}}'"
+                        "'{trimmed}' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"
                     ),
                     line_number: self.line_number,
                 })
@@ -196,7 +197,7 @@ impl StreamingPatchParser {
                 }
                 Err(InvalidHunkError {
                     message: format!(
-                        "'{trimmed}' is not a valid hunk header. Valid hunk headers: '*** Add File: {{path}}', '*** Delete File: {{path}}', '*** Update File: {{path}}'"
+                        "'{trimmed}' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"
                     ),
                     line_number: self.line_number,
                 })
@@ -207,7 +208,7 @@ impl StreamingPatchParser {
                 }
                 Err(InvalidHunkError {
                     message: format!(
-                        "'{trimmed}' is not a valid hunk header. Valid hunk headers: '*** Add File: {{path}}', '*** Delete File: {{path}}', '*** Update File: {{path}}'"
+                        "'{trimmed}' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"
                     ),
                     line_number: self.line_number,
                 })
@@ -752,8 +753,7 @@ mod tests {
         assert_eq!(
             parser.push_delta("bad\n"),
             Err(InvalidHunkError {
-                message: "'bad' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'"
-                    .to_string(),
+                message: format!("'bad' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"),
                 line_number: 2,
             })
         );
@@ -762,8 +762,7 @@ mod tests {
         assert_eq!(
             parser.push_delta("*** Begin Patch\n*** Add File: file.txt\nbad\n"),
             Err(InvalidHunkError {
-                message: "'bad' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'"
-                    .to_string(),
+                message: format!("'bad' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"),
                 line_number: 3,
             })
         );
@@ -772,8 +771,7 @@ mod tests {
         assert_eq!(
             parser.push_delta("*** Begin Patch\n*** Delete File: file.txt\nbad\n"),
             Err(InvalidHunkError {
-                message: "'bad' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'"
-                    .to_string(),
+                message: format!("'bad' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"),
                 line_number: 3,
             })
         );
