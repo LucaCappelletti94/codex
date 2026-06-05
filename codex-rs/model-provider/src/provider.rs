@@ -179,6 +179,13 @@ impl ModelProvider for ConfiguredModelProvider {
         &self.info
     }
 
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            web_search: self.info.requires_openai_auth,
+            ..ProviderCapabilities::default()
+        }
+    }
+
     fn auth_manager(&self) -> Option<Arc<AuthManager>> {
         self.auth_manager.clone()
     }
@@ -359,6 +366,16 @@ mod tests {
         );
 
         assert_eq!(provider.capabilities(), ProviderCapabilities::default());
+    }
+
+    #[test]
+    fn non_openai_provider_disables_hosted_web_search() {
+        let provider = create_model_provider(
+            codex_model_provider_info::create_oss_provider(11434, WireApi::Responses),
+            /*auth_manager*/ None,
+        );
+
+        assert!(!provider.capabilities().web_search);
     }
 
     #[test]
