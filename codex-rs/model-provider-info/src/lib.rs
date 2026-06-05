@@ -134,6 +134,11 @@ pub struct ModelProviderInfo {
     /// Whether this provider supports the Responses API WebSocket transport.
     #[serde(default)]
     pub supports_websockets: bool,
+    /// Whether this provider understands Codex's `type: "namespace"` tool wrapper.
+    /// When false, MCP tools are flattened to plain `mcp__<server>__<tool>`
+    /// functions. When unset, most providers default to `requires_openai_auth`.
+    #[serde(default)]
+    pub namespace_tools: Option<bool>,
 }
 
 /// AWS SigV4 auth configuration for a model provider.
@@ -350,6 +355,7 @@ impl ModelProviderInfo {
             websocket_connect_timeout_ms: None,
             requires_openai_auth: true,
             supports_websockets: true,
+            namespace_tools: None,
         }
     }
 
@@ -380,6 +386,7 @@ impl ModelProviderInfo {
             websocket_connect_timeout_ms: None,
             requires_openai_auth: false,
             supports_websockets: false,
+            namespace_tools: None,
         }
     }
 
@@ -511,6 +518,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str, wire_api: WireApi) -> M
         websocket_connect_timeout_ms: None,
         requires_openai_auth: false,
         supports_websockets: false,
+        namespace_tools: None,
     }
 }
 
