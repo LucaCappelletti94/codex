@@ -188,6 +188,7 @@ impl ModelProvider for ConfiguredModelProvider {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             namespace_tools: resolve_namespace_tools(&self.info),
+            web_search: self.info.requires_openai_auth,
             ..ProviderCapabilities::default()
         }
     }
@@ -396,6 +397,16 @@ mod tests {
         openai.namespace_tools = Some(false);
         let provider = create_model_provider(openai, /*auth_manager*/ None);
         assert!(!provider.capabilities().namespace_tools);
+    }
+
+    #[test]
+    fn non_openai_provider_disables_hosted_web_search() {
+        let provider = create_model_provider(
+            codex_model_provider_info::create_oss_provider(11434, WireApi::Responses),
+            /*auth_manager*/ None,
+        );
+
+        assert!(!provider.capabilities().web_search);
     }
 
     #[test]
