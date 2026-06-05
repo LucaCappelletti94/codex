@@ -80,6 +80,46 @@ async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
     );
 }
 
+#[tokio::test]
+async fn matches_kind_accepts_both_custom_and_function_payloads() {
+    let handler = ApplyPatchHandler::default();
+    assert!(handler.matches_kind(&ToolPayload::Custom {
+        input: sample_patch().to_string(),
+    }));
+    assert!(handler.matches_kind(&ToolPayload::Function {
+        arguments: json!({ "patch": sample_patch() }).to_string(),
+    }));
+}
+
+#[tokio::test]
+async fn pre_tool_use_payload_extracts_patch_from_function_arguments() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Function {
+        arguments: json!({ "patch": patch }).to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler::default();
+
+    assert_eq!(
+        handler.pre_tool_use_payload(&invocation),
+        Some(PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: json!({ "command": patch }),
+        })
+    );
+}
+
+#[tokio::test]
+async fn function_payload_without_patch_has_no_hook_command() {
+    let payload = ToolPayload::Function {
+        arguments: json!({ "not_patch": "x" }).to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler::default();
+
+    assert_eq!(handler.pre_tool_use_payload(&invocation), None);
+}
+
 #[test]
 fn diff_consumer_streams_apply_patch_changes() {
     let mut consumer = ApplyPatchArgumentDiffConsumer::default();
