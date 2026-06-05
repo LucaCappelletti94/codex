@@ -232,7 +232,7 @@ fn test_apply_patch_cli_rejects_invalid_hunk_header() -> anyhow::Result<()> {
         .arg("*** Begin Patch\n*** Frobnicate File: foo\n*** End Patch")
         .assert()
         .failure()
-        .stderr("Invalid patch hunk on line 2: '*** Frobnicate File: foo' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'\n");
+        .stderr("Invalid patch hunk on line 2: '*** Frobnicate File: foo' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'. The most common cause is a content line missing its leading '+': every added line must begin with '+'.\n");
 
     Ok(())
 }

@@ -57,6 +57,20 @@ fn create_apply_patch_function_tool_exposes_patch_parameter() {
 }
 
 #[test]
+fn create_apply_patch_function_tool_states_plus_rule_in_top_level_description() {
+    let ToolSpec::Function(tool) =
+        create_apply_patch_function_tool(/*include_environment_id*/ false)
+    else {
+        panic!("expected function tool");
+    };
+
+    // Open models weight the top-level description over per-parameter schema, so
+    // the leading-`+` rule must appear there, not only in the patch description.
+    assert!(tool.description.contains('+'));
+    assert!(tool.description.contains("*** Add File:"));
+}
+
+#[test]
 fn create_apply_patch_function_tool_adds_environment_id_when_requested() {
     let ToolSpec::Function(tool) =
         create_apply_patch_function_tool(/*include_environment_id*/ true)

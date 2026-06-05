@@ -43,6 +43,11 @@ pub(crate) const EOF_MARKER: &str = "*** End of File";
 pub(crate) const CHANGE_CONTEXT_MARKER: &str = "@@ ";
 pub(crate) const EMPTY_CHANGE_CONTEXT_MARKER: &str = "@@";
 
+/// Shared suffix for "not a valid hunk header" errors. Lists the valid headers
+/// and points at the most common cause: a content line that should be added but
+/// is missing its leading `+`.
+pub(crate) const INVALID_HUNK_HEADER_HELP: &str = "Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'. The most common cause is a content line missing its leading '+': every added line must begin with '+'.";
+
 /// Currently, the only OpenAI model that knowingly requires lenient parsing is
 /// gpt-4.1. While we could try to require everyone to pass in a strictness
 /// param when invoking apply_patch, it is a pain to thread it through all of
@@ -366,9 +371,7 @@ fn parse_one_hunk(lines: &[&str], line_number: usize) -> Result<(Hunk, usize), P
     }
 
     Err(InvalidHunkError {
-        message: format!(
-            "'{first_line}' is not a valid hunk header. Valid hunk headers: '*** Add File: {{path}}', '*** Delete File: {{path}}', '*** Update File: {{path}}'"
-        ),
+        message: format!("'{first_line}' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"),
         line_number,
     })
 }
@@ -469,8 +472,7 @@ fn test_parse_one_hunk() {
     assert_eq!(
         parse_one_hunk(&["bad"], /*line_number*/ 234),
         Err(InvalidHunkError {
-            message: "'bad' is not a valid hunk header. \
-            Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'".to_string(),
+            message: format!("'bad' is not a valid hunk header. {INVALID_HUNK_HEADER_HELP}"),
             line_number: 234
         })
     );
